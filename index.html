@@ -2690,6 +2690,7 @@ html[data-theme="dark"] .icon.hi .badge{ border-color:#0b101b; }
       <div class="modal-rating" id="modalRating"></div>
       <p class="modal-desc">🔥 Premium dad və xüsusi resept. Təzə hazırlanır və sürətli çatdırılır.</p>
       <div class="modal-price" id="modalPrice"></div>
+      <div id="modalShop" style="margin:8px 0 4px;line-height:1.45;"></div>
       <div class="quantity-box">
         <button onclick="changeQty(-1)">−</button>
         <span id="qty">1</span>
@@ -2779,14 +2780,12 @@ html[data-theme="dark"] .icon.hi .badge{ border-color:#0b101b; }
   <h3>💳 Ödəmə üsulu</h3>
   <div class="btn primary" id="payOptCash" onclick="selectPayment('cash')">💵 Nağd</div>
   <div class="btn primary" id="payOptCard" onclick="selectPayment('card')">💳 Kart (çatdırılmada)</div>
-  <div class="btn primary" id="payOptGpay" style="opacity:.45;cursor:not-allowed;" onclick="if(window.showToast) window.showToast('⏳ Google Pay tezliklə aktiv olacaq'); else alert('Google Pay tezliklə aktiv olacaq');">📱 Google Pay <span style="font-size:11px;opacity:.8;">(tezliklə)</span></div>
 
   <div id="cardForm" class="premium-card-form" style="display:none;">
     <div style="padding:16px;border-radius:16px;border:1px solid rgba(255,122,0,0.35);background:rgba(255,122,0,0.07);line-height:1.6;font-size:14px;">
       <div style="font-weight:800;font-size:15px;margin-bottom:6px;">💳 Kartla ödəniş — çatdırılma zamanı</div>
       Sifarişi kuryer gətirəndə bank kartınızla <b>POS-terminal</b> vasitəsilə ödəyə bilərsiniz.
       Tətbiq kart nömrəsi, son tarix və ya CVC kodu <b>soruşmur və saxlamır</b>.
-      <div style="margin-top:8px;opacity:.7;font-size:12.5px;">Onlayn kart ödənişi lisenziyalı ödəniş provayderi ilə tezliklə əlavə olunacaq.</div>
     </div>
   </div>
 </div>
@@ -2932,7 +2931,7 @@ html[data-theme="dark"] .icon.hi .badge{ border-color:#0b101b; }
     <h4>🚚 Çatdırılma müddəti nə qədərdir?</h4>
     <p>Orta çatdırılma müddəti 15-35 dəqiqədir, məsafədən asılı olaraq dəyişə bilər.</p>
     <h4>💳 Hansı ödəmə üsulları var?</h4>
-    <p>Nağd və bank kartı (Visa/MasterCard) ilə ödəniş edə bilərsiniz. Google Pay dəstəyi tezliklə əlavə olunacaq.</p>
+    <p>Nağd və ya çatdırılma zamanı bank kartı (Visa/MasterCard, kuryerin POS-terminalı) ilə ödəniş edə bilərsiniz.</p>
     <h4>❌ Sifarişi ləğv edə bilərəmmi?</h4>
     <p>Bəli, sifariş "Hazırlanır" statusunda olduğu müddətdə "Sifarişlər (İzləmə)" bölməsindən ləğv edə bilərsiniz.</p>
     <h4>🎁 Kupon necə istifadə olunur?</h4>
@@ -2962,6 +2961,7 @@ html[data-theme="dark"] .icon.hi .badge{ border-color:#0b101b; }
     <div id="etaCountdown" style="font-size:34px;font-weight:800;color:var(--orange);letter-spacing:1px;">3:30</div>
     <div id="etaCountdownSub" style="font-size:11px;opacity:.55;margin-top:4px;"></div>
   </div>
+  <div id="orderShopInfo" style="display:none;margin:10px 0;background:#0e0e0e;padding:12px;border-radius:12px;line-height:1.45;"></div>
   <p id="statusText">Aktiv sifariş tapılmadı.</p>
   <div id="map" style="width:100%;height:250px;border-radius:15px;margin-top:15px;display:none;"></div>
   <div id="courierContactBox" style="display:none;margin-top:15px;background:#0e0e0e;padding:12px;border-radius:12px;">
@@ -3273,7 +3273,7 @@ async function render(searchText = "", globalSearch = false){
                 ${chainAddr ? `<div class="chain-addr">📌 ${chainAddr}</div>` : ''}
                 <div class="chain-badges">
                   <span class="chain-badge rating">⭐ ${chainAvgRating}</span>
-                  ${(distanceKm !== null && distanceKm !== undefined) ? `<span class="chain-badge dist">📍 ${isRoad ? '' : '~'}${(isRoad ? distanceKm : distanceKm * 1.3).toFixed(1)} km</span>` : ''}
+                  ${(distanceKm !== null && distanceKm !== undefined) ? `<span class="chain-badge dist">📍 ${isRoad ? '' : '~'}${fmtKm(isRoad ? distanceKm : distanceKm * 1.3)}</span>` : ''}
                   <span class="chain-badge eta">🕒 ${etaLabel}</span>
                   <span class="chain-badge count">${items.length} məhsul</span>
                 </div>
@@ -3368,6 +3368,7 @@ async function loadRoadDistances(){
   if(changed && window.__roadDistKey === key){
     var sv = (document.getElementById("search") || {}).value || "";
     render(sv, sv.trim().length > 0);
+    try{ refreshProductShopInfo(); }catch(e){}
   }
 }
 window.loadRoadDistances = loadRoadDistances;
@@ -4423,6 +4424,7 @@ function listenToActiveOrder(orderId) {
                 cancelBox.style.display = "none";
             }
             
+            try{ renderOrderShopInfo(data); }catch(e){}
             if(statusTextEl) {
                 let displayStatus = data.status;
                 if(data.status === "preparing") displayStatus = "🍔 Hazırlanır...";
@@ -4961,6 +4963,60 @@ async function submitReview(){
   } catch(e){ showToast("❌ Rəy göndərilmədi"); }
 }
 
+/* ===== Restoran ünvanı + müştəriyə məsafə (məhsul pəncərəsi və sifariş izləmə) ===== */
+function fmtKm(km){ return km < 0.1 ? "<0.1 km" : km.toFixed(1) + " km"; }
+function __userLL(){
+  const la = parseFloat(localStorage.getItem("userLat")), ln = parseFloat(localStorage.getItem("userLng"));
+  return (isNaN(la) || isNaN(ln)) ? null : { lat: la, lng: ln };
+}
+function __shopInfoHtml(f){
+  const rid = f && f.restaurantId && f.restaurantId !== "unknown" ? f.restaurantId : null;
+  const name = escHtml((f && (f.restaurantName || f.chain)) || "");
+  const addr = escHtml((rid && restaurantAddresses[rid]) || (f && f.restaurantAddress) || "");
+  let c = rid ? restaurantCoords[rid] : null;
+  if(!c && f){ const la = parseFloat(f.restaurantLat), ln = parseFloat(f.restaurantLng); if(!isNaN(la) && !isNaN(ln)) c = { lat: la, lng: ln }; }
+  const u = __userLL();
+  let dist = "";
+  if(c && u){
+    const rk = rid ? (window.__roadDist || {})[rid] : undefined;
+    const isRoad = typeof rk === "number" && window.__roadDistKey === (u.lat.toFixed(4) + "," + u.lng.toFixed(4));
+    dist = isRoad ? fmtKm(rk) : "~" + fmtKm(haversineDistanceKm(c.lat, c.lng, u.lat, u.lng) * 1.3);
+  }
+  let h = "";
+  if(name) h += `<div style="font-weight:700;">🏪 ${name}</div>`;
+  if(addr) h += `<div style="opacity:.8;font-size:13px;margin-top:2px;">📌 ${addr}</div>`;
+  if(dist) h += `<div style="font-size:13px;margin-top:2px;">📍 Sizə qədər: <b>${dist}</b></div>`;
+  else if(c && !u) h += `<div style="opacity:.7;font-size:12.5px;margin-top:2px;">📍 Məsafəni görmək üçün çatdırılma ünvanınızı təyin edin</div>`;
+  return h;
+}
+function refreshProductShopInfo(){
+  const el = document.getElementById("modalShop");
+  if(el && selectedProduct) el.innerHTML = __shopInfoHtml(selectedProduct);
+}
+/* Sifariş izləmədə: restoran adı, ünvanı və restoran → müştəri real məsafəsi */
+let __osiKey = "";
+async function renderOrderShopInfo(data){
+  const el = document.getElementById("orderShopInfo");
+  if(!el || !data) return;
+  const rid = data.restaurantId;
+  const name = escHtml(data.restaurantName || "");
+  const addr = escHtml(data.restaurantAddress || (rid && restaurantAddresses[rid]) || "");
+  const rLa = parseFloat(data.restaurantLat), rLn = parseFloat(data.restaurantLng);
+  const cLa = parseFloat(data.customerLat), cLn = parseFloat(data.customerLng);
+  const base = (name ? `<div style="font-weight:700;">🏪 ${name}</div>` : "") + (addr ? `<div style="opacity:.8;font-size:13px;margin-top:2px;">📌 ${addr}</div>` : "");
+  const paint = (d) => { el.innerHTML = base + (d ? `<div style="font-size:13px;margin-top:2px;">📍 Restoran → siz: <b>${d}</b></div>` : ""); el.style.display = (base || d) ? "block" : "none"; };
+  if([rLa, rLn, cLa, cLn].some(isNaN)){ paint(""); return; }
+  const key = [rLa, rLn, cLa, cLn].map(v => v.toFixed(4)).join(",");
+  const est = "~" + fmtKm(haversineDistanceKm(rLa, rLn, cLa, cLn) * 1.3);
+  if(__osiKey === key && el.dataset.km){ paint(el.dataset.km); return; }
+  paint(est);
+  __osiKey = key;
+  try{
+    const rt = await window.BGMap.route({ lat: rLa, lng: rLn }, { lat: cLa, lng: cLn });
+    if(rt && rt.distance && __osiKey === key){ el.dataset.km = fmtKm(rt.distance / 1000); paint(el.dataset.km); }
+  }catch(e){}
+}
+
 function openProduct(i){
   const f = foods[i];
   if(isAgeRestricted(f) && !isAgeVerified()){
@@ -4979,6 +5035,7 @@ function openProduct(i){
   } else {
     modalPriceEl.innerText = selectedProduct.price.toFixed(2) + " AZN / " + (selectedProduct.unit || "ədəd");
   }
+  refreshProductShopInfo();
   qty = 1;
   document.getElementById("qty").innerText = qty;
   selectedReviewStars = 0;
@@ -5008,7 +5065,7 @@ function addModalToCart(){
   toggleCart();
 }
 
-window.selectedPaymentMethod = localStorage.getItem("bakugoPaymentMethod") || "cash";
+window.selectedPaymentMethod = (function(){ var m = localStorage.getItem("bakugoPaymentMethod"); return (m === "card" || m === "cash") ? m : "cash"; })();
 window.addressNote = localStorage.getItem("bakugoAddressNote") || "";
 function renderAddressNoteBox(){
   const editBox = document.getElementById("addressNoteEdit");
@@ -5047,11 +5104,10 @@ document.addEventListener("DOMContentLoaded", renderAddressNoteBox);
 function paymentMethodLabel(type){
   if(type === "cash") return "Nağd";
   if(type === "card") return "Kart (çatdırılmada, POS)";
-  if(type === "googlepay") return "Google Pay";
   return "Nağd";
 }
 function refreshPaymentUI(){
-  const map = { cash:"payOptCash", card:"payOptCard", googlepay:"payOptGpay" };
+  const map = { cash:"payOptCash", card:"payOptCard" };
   Object.keys(map).forEach(key => {
     const el = document.getElementById(map[key]);
     if(el) el.classList.toggle("pay-selected", key === window.selectedPaymentMethod);
@@ -6607,6 +6663,10 @@ function updatePromoBadges(){
           throw new Error("Restoran hazırda bağlıdır (iş saatları: " + resData.openTime + "–" + resData.closeTime + ").");
         }
       }
+      const custLat = parseFloat(localStorage.getItem("userLat")), custLng = parseFloat(localStorage.getItem("userLng"));
+      if (isNaN(custLat) || isNaN(custLng)) {
+        throw new Error("Çatdırılma ünvanınız təyin olunmayıb. Əvvəl «Məkanımı avtomatik tap» və ya ünvanı əllə seçin.");
+      }
       const resLat = parseFloat(resData.restaurantLat) || 40.4093;
       const resLng = parseFloat(resData.restaurantLng) || 49.8671;
       
@@ -6617,13 +6677,13 @@ function updatePromoBadges(){
         customerSurname: document.getElementById("surnameInput").value || "",
         customerPhone: document.getElementById("phoneInput").value || "Qeyd olunmayıb",
         customerAddress: document.getElementById("location").value || "Ünvan qeyd olunmayıb",
-        customerLat: parseFloat(localStorage.getItem("userLat")) || 40.4093,
-        customerLng: parseFloat(localStorage.getItem("userLng")) || 49.8671,
+        customerLat: custLat,
+        customerLng: custLng,
         
         restaurantId: restaurantId || "unknown",
         restaurantName: firstItem.restaurantName || firstItem.chain || "Go Route",
         restaurantPhone: firstItem.restaurantPhone || "+994702484852",
-        restaurantAddress: firstItem.restaurantAddress || "Bakı",
+        restaurantAddress: resData.restaurantAddress || firstItem.restaurantAddress || "Bakı",
         restaurantLat: resLat,
         restaurantLng: resLng,
         
