@@ -669,6 +669,13 @@
         console.warn('Google Distance Matrix alınmadı:', e && (e.code || e.message));
       }
     }
+    /* 3) Ehtiyat: hər restoran üçün ayrıca Google marşrutu (A→B), ən çox 12 */
+    var left = 0;
+    for (var k = 0; k < dests.length && left < 12; k++) {
+      if (out[k] !== null) continue;
+      left++;
+      try { var rt = await BGMap.route(o, dests[k]); if (rt && rt.distance) out[k] = rt.distance; } catch(e){}
+    }
     return out;
   }
   function decodePolyline(s){
@@ -2356,6 +2363,8 @@ input, textarea, [contenteditable]{ -webkit-user-select:text; user-select:text; 
 .chain-section{content-visibility:auto;contain-intrinsic-size:auto 96px;}
 *{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}
 #adOverlay,#loader{-webkit-backdrop-filter:blur(6px) !important;backdrop-filter:blur(6px) !important;}
+/* Yan panellər (menyu, ödəniş, profil...) bulanıqlıq olmadan arxadakı yazını göstərməsin deyə tam qaranlıq (opaq) */
+.panel{background:#060c18 !important;}
 /* Ağır arxa fon effektləri (160px blur edilmiş fixed qatlar, siçan işığı) donma yaradırdı — söndürüldü */
 .orbs,.cursor-glow,#bg{display:none !important;}
 .fade{animation:none !important;}
@@ -3273,7 +3282,7 @@ async function render(searchText = "", globalSearch = false){
                 ${chainAddr ? `<div class="chain-addr">📌 ${chainAddr}</div>` : ''}
                 <div class="chain-badges">
                   <span class="chain-badge rating">⭐ ${chainAvgRating}</span>
-                  ${(distanceKm !== null && distanceKm !== undefined) ? `<span class="chain-badge dist">📍 ${isRoad ? '' : '~'}${fmtKm(isRoad ? distanceKm : distanceKm * 1.3)}</span>` : ''}
+                  ${isRoad ? `<span class="chain-badge dist">📍 ${fmtKm(distanceKm)}</span>` : ''}
                   <span class="chain-badge eta">🕒 ${etaLabel}</span>
                   <span class="chain-badge count">${items.length} məhsul</span>
                 </div>
@@ -4980,7 +4989,8 @@ function __shopInfoHtml(f){
   if(c && u){
     const rk = rid ? (window.__roadDist || {})[rid] : undefined;
     const isRoad = typeof rk === "number" && window.__roadDistKey === (u.lat.toFixed(4) + "," + u.lng.toFixed(4));
-    dist = isRoad ? fmtKm(rk) : "~" + fmtKm(haversineDistanceKm(c.lat, c.lng, u.lat, u.lng) * 1.3);
+    if(isRoad) dist = fmtKm(rk);
+    else if(rid && (__roadPending.has(rid) || __roadRunning)) dist = "hesablanır…";
   }
   let h = "";
   if(name) h += `<div style="font-weight:700;">🏪 ${name}</div>`;
@@ -4991,7 +5001,10 @@ function __shopInfoHtml(f){
 }
 function refreshProductShopInfo(){
   const el = document.getElementById("modalShop");
-  if(el && selectedProduct) el.innerHTML = __shopInfoHtml(selectedProduct);
+  if(el && selectedProduct){
+    el.innerHTML = __shopInfoHtml(selectedProduct);
+    try{ loadRoadDistances(); }catch(e){}
+  }
 }
 /* Sifariş izləmədə: restoran adı, ünvanı və restoran → müştəri real məsafəsi */
 let __osiKey = "";
@@ -5007,9 +5020,8 @@ async function renderOrderShopInfo(data){
   const paint = (d) => { el.innerHTML = base + (d ? `<div style="font-size:13px;margin-top:2px;">📍 Restoran → siz: <b>${d}</b></div>` : ""); el.style.display = (base || d) ? "block" : "none"; };
   if([rLa, rLn, cLa, cLn].some(isNaN)){ paint(""); return; }
   const key = [rLa, rLn, cLa, cLn].map(v => v.toFixed(4)).join(",");
-  const est = "~" + fmtKm(haversineDistanceKm(rLa, rLn, cLa, cLn) * 1.3);
   if(__osiKey === key && el.dataset.km){ paint(el.dataset.km); return; }
-  paint(est);
+  paint("");
   __osiKey = key;
   try{
     const rt = await window.BGMap.route({ lat: rLa, lng: rLn }, { lat: cLa, lng: cLn });
