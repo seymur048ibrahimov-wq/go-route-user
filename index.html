@@ -595,6 +595,8 @@
       routeCache[key] = { t: Date.now(), p: p };
       return p;
     },
+    /* Bir başlanğıcdan bir neçə təyinata real yol məsafəsi (metr) — massiv, alınmayan yer null */
+    matrix: function(o, dests){ return matrixCalc(toLL(o), dests.map(function(d){ return toLL(d); })); },
     /* Google Maps tətbiqində marşrutu aç */
     navUrl: function(lat, lng){ return 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng + '&travelmode=driving'; }
   };
@@ -631,6 +633,43 @@
       } catch(e){ console.warn('Google Routes API alınmadı:', e && e.message); }
     }
     return null;
+  }
+  async function matrixCalc(o, dests){
+    var out = dests.map(function(){ return null; });
+    if (!okLL(o) || !dests.length) return out;
+    /* 1) Google Routes API — Route Matrix (bir sorğuda bir neçə restoran) */
+    if (!disabled.matrixApi && _fetch) {
+      try {
+        var res = await _fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GMAPS_KEY, 'X-Goog-FieldMask': 'originIndex,destinationIndex,distanceMeters,condition' },
+          body: JSON.stringify({
+            origins: [{ waypoint: { location: { latLng: { latitude: o.lat, longitude: o.lng } } } }],
+            destinations: dests.map(function(d){ return { waypoint: { location: { latLng: { latitude: d.lat, longitude: d.lng } } } }; }),
+            travelMode: 'DRIVE', routingPreference: 'TRAFFIC_UNAWARE'
+          })
+        });
+        if (res.status === 403 || res.status === 404) disabled.matrixApi = true;
+        var j = await res.json();
+        if (Array.isArray(j)) {
+          j.forEach(function(e){ if (e && typeof e.destinationIndex === 'number' && typeof e.distanceMeters === 'number' && (!e.condition || e.condition === 'ROUTE_EXISTS')) out[e.destinationIndex] = e.distanceMeters; });
+          if (out.some(function(v){ return v !== null; })) return out;
+        }
+      } catch(e){ console.warn('Google Route Matrix alınmadı:', e && e.message); }
+    }
+    /* 2) Ehtiyat: Google Distance Matrix (JS) */
+    try { await ready; } catch(e){ return out; }
+    if (!disabled.distMatrix && gm && gm.DistanceMatrixService) {
+      try {
+        var r = await new gm.DistanceMatrixService().getDistanceMatrix({ origins: [o], destinations: dests, travelMode: 'DRIVING', region: 'az' });
+        var els = r && r.rows && r.rows[0] && r.rows[0].elements || [];
+        els.forEach(function(el, i){ if (el && el.status === 'OK' && el.distance) out[i] = el.distance.value; });
+      } catch(e){
+        if (/REQUEST_DENIED|not.*(enabled|activated|authorized)|legacy/i.test(String(e && (e.code || e.message)))) disabled.distMatrix = true;
+        console.warn('Google Distance Matrix alınmadı:', e && (e.code || e.message));
+      }
+    }
+    return out;
   }
   function decodePolyline(s){
     if (!s) return [];
@@ -715,7 +754,9 @@
         }
       }
     } catch(e){ console.warn('Google xidməti cavab vermədi, ehtiyat xidmətə keçilir:', e && e.message); }
-    /* son ehtiyat: köhnə açıq xidmət */
+    /* OSRM artıq istifadə olunmur — marşrut alınmadısa boş cavab qaytarılır, çağıran kod düz xətt təxminə keçir */
+    if (kind === 'osrm') return jsonResp({ code: 'NoRoute', routes: [] });
+    /* son ehtiyat: köhnə açıq xidmət (yalnız ünvan axtarışı üçün) */
     return _fetch(input, init);
   }
   if (_fetch) {
@@ -925,7 +966,7 @@ will-change: auto;
 transform: translate3d(0,0,0);
 z-index:-4;
 pointer-events:none;
-filter:contrast(1.05) brightness(1.02) saturate(1.1);
+filter:none;
 }
 
 @keyframes gradientFlow{
@@ -947,7 +988,7 @@ radial-gradient(ellipse at center, transparent 20%, rgba(2,7,18,0.92) 100%);
 html[data-theme="dark"] #bgGradient{
 background: linear-gradient(-45deg, var(--nebula-deep), var(--deep-navy), var(--aurora-indigo), var(--deep-teal), var(--nebula-deep), var(--deep-navy), var(--nebula-deep));
 background-size: 500% 500%;
-filter:contrast(1.05) brightness(0.95) saturate(1.15);
+filter:none;
 }
 
 html[data-theme="dark"] header{
@@ -2309,6 +2350,16 @@ input, textarea, [contenteditable]{ -webkit-user-select:text; user-select:text; 
 .fire-logo span{ font-size:21px !important; letter-spacing:.4px; }
 .fire-logo .sp{ display:inline-block; width:7px; }
 .fire-logo .lightning{ font-size:22px !important; margin-right:4px !important; }
+
+/* ===== GO ROUTE: restoran ünvanı + yüngülləşdirmə ===== */
+.chain-addr{font-size:11.5px;opacity:.72;margin:2px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.chain-section{content-visibility:auto;contain-intrinsic-size:auto 96px;}
+*{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}
+#adOverlay,#loader{-webkit-backdrop-filter:blur(6px) !important;backdrop-filter:blur(6px) !important;}
+/* Ağır arxa fon effektləri (160px blur edilmiş fixed qatlar, siçan işığı) donma yaradırdı — söndürüldü */
+.orbs,.cursor-glow,#bg{display:none !important;}
+.fade{animation:none !important;}
+html.app-hidden *,html.app-hidden *::before,html.app-hidden *::after{animation-play-state:paused !important;}
 #splash h1{ font-size:38px !important; }
 
 /* ===== PREMİUM BAŞLIQ İKONLARI (menyu / bildiriş / hesab) ===== */
@@ -2427,8 +2478,9 @@ html[data-theme="dark"] .icon.hi .badge{ border-color:#0b101b; }
   /* Eyni HTML yenidən gələndə DOM-a ümumiyyətlə toxunma */
   window.__setHTMLIfChanged = function(el, html){
     if (!el) return false;
-    if (el.__lastHtml === html && el.firstChild) return false;
-    el.__lastHtml = html; el.innerHTML = html; return true;
+    /* firstChild yoxlaması: başqa kod innerHTML-i birbaşa dəyişibsə köhnə keş etibarsızdır */
+    if (el.__lastHtml === html && el.firstChild && el.firstChild === el.__lastFirst) return false;
+    el.__lastHtml = html; el.innerHTML = html; el.__lastFirst = el.firstChild; return true;
   };
 
 
@@ -3129,7 +3181,7 @@ async function render(searchText = "", globalSearch = false){
     let distanceKm = null;
     let isRoad = false;
     if(hasUserCoords && coords){
-      // Əvvəl REAL yol məsafəsi (OSRM) - hazır deyilsə müvəqqəti düz xətt (yalnız çeşidləmə/radius üçün, ekranda göstərilmir)
+      // Əvvəl REAL yol məsafəsi (Google) - hazır deyilsə müvəqqəti düz xətt (yalnız çeşidləmə/radius üçün, ekranda göstərilmir)
       const curKey = uLatForSort.toFixed(4) + "," + uLngForSort.toFixed(4);
       const rk = groupRestaurantId ? (window.__roadDist || {})[groupRestaurantId] : undefined;
       if(typeof rk === "number" && window.__roadDistKey === curKey){
@@ -3182,6 +3234,10 @@ async function render(searchText = "", globalSearch = false){
         ? `<img src="${optimizeImg(chainLogoUrl, 96)}" width="48" height="48" alt="" loading="lazy" decoding="async" onerror="this.parentElement.innerHTML='${chainInitial}';">`
         : chainInitial;
 
+      // Restoranın ünvanı: əvvəl restoran sənədindən, yoxdursa məhsulun üzərindəki köçürülmüş sahədən
+      const chainAddr = String((groupRestaurantId && restaurantAddresses[groupRestaurantId]) || (items.find(it => it.f.restaurantAddress) || { f: {} }).f.restaurantAddress || "")
+        .trim().replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
       // Zəncirin orta reytinqi (Bolt Food/Wolt-dakı ⭐ çipi üçün)
       const ratingsSum = items.reduce((s, it) => s + parseFloat(getAvgRating(it.f.name) || it.f.rating || 5.0), 0);
       const chainAvgRating = (ratingsSum / items.length).toFixed(1);
@@ -3214,9 +3270,10 @@ async function render(searchText = "", globalSearch = false){
               <div class="chain-icon">${chainIconHtml}</div>
               <div style="min-width:0;">
                 <div class="chain-name">${chainKey}</div>
+                ${chainAddr ? `<div class="chain-addr">📌 ${chainAddr}</div>` : ''}
                 <div class="chain-badges">
                   <span class="chain-badge rating">⭐ ${chainAvgRating}</span>
-                  ${isRoad ? `<span class="chain-badge dist">📍 ${distanceKm.toFixed(1)} km</span>` : ''}
+                  ${(distanceKm !== null && distanceKm !== undefined) ? `<span class="chain-badge dist">📍 ${isRoad ? '' : '~'}${(isRoad ? distanceKm : distanceKm * 1.3).toFixed(1)} km</span>` : ''}
                   <span class="chain-badge eta">🕒 ${etaLabel}</span>
                   <span class="chain-badge count">${items.length} məhsul</span>
                 </div>
@@ -3254,7 +3311,7 @@ async function render(searchText = "", globalSearch = false){
 }
 
 /* ===== REAL yol məsafəsi: müştəridən hər restorana (quş baxışı YOX) =====
-   OSRM "table" xidməti ilə bir sorğuda bir neçə restoranın yol üzrə məsafəsi alınır.
+   Google Route Matrix ilə bir sorğuda bir neçə restoranın yol üzrə məsafəsi alınır.
    Alınmayan restoranlar üçün ekranda rəqəm göstərilmir (yanlış düz xətt rəqəmi göstərmirik). */
 window.__roadDist = window.__roadDist || {};
 window.__roadDistKey = window.__roadDistKey || "";
@@ -3289,26 +3346,16 @@ async function loadRoadDistances(){
   __roadRunning = true;
   var changed = false;
   try{
-    for(var i = 0; i < ids.length; i += 40){
-      var chunk = ids.slice(i, i + 40);
+    for(var i = 0; i < ids.length; i += 25){
+      var chunk = ids.slice(i, i + 25);
       chunk.forEach(function(id){ __roadPending.add(id); });
       try{
-        var coordStr = [uLng + "," + uLat].concat(chunk.map(function(id){ return restaurantCoords[id].lng + "," + restaurantCoords[id].lat; })).join(";");
-        var url = "https://router.project-osrm.org/table/v1/driving/" + coordStr + "?sources=0&annotations=distance";
-        var ctl = new AbortController();
-        var tm = setTimeout(function(){ ctl.abort(); }, 8000);
-        var res = await fetch(url, { signal: ctl.signal });
-        clearTimeout(tm);
-        var data = await res.json();
-        if(data && data.code === "Ok" && data.distances && data.distances[0]){
-          chunk.forEach(function(id, idx){
-            var m = data.distances[0][idx + 1];
-            if(typeof m === "number" && window.__roadDistKey === key){ window.__roadDist[id] = m / 1000; changed = true; }
-            else __roadFailed.set(id, Date.now());
-          });
-        } else {
-          chunk.forEach(function(id){ __roadFailed.set(id, Date.now()); });
-        }
+        var arr = await window.BGMap.matrix({ lat: uLat, lng: uLng }, chunk.map(function(id){ return { lat: restaurantCoords[id].lat, lng: restaurantCoords[id].lng }; }));
+        chunk.forEach(function(id, idx){
+          var m = arr[idx];
+          if(typeof m === "number" && window.__roadDistKey === key){ window.__roadDist[id] = m / 1000; changed = true; }
+          else __roadFailed.set(id, Date.now());
+        });
       }catch(e){
         chunk.forEach(function(id){ __roadFailed.set(id, Date.now()); });
       }finally{
@@ -3324,6 +3371,8 @@ async function loadRoadDistances(){
   }
 }
 window.loadRoadDistances = loadRoadDistances;
+/* Tətbiq arxa fonda olanda animasiyalar dayansın (batareya və CPU qənaəti) */
+document.addEventListener("visibilitychange", function(){ document.documentElement.classList.toggle("app-hidden", document.hidden); });
 
 let locationMap, locationMarker, locationAccuracyCircle;
 
@@ -3808,25 +3857,18 @@ window.backfillRestaurantGeohashes = async function(){
   return { updated, skipped };
 };
 
-// Real yol marşrutuna görə məsafə (km) və müddət (saniyə) - OSRM açıq marşrutlaşdırma servisi.
-// Kuryer tətbiqindəki eyni OSRM inteqrasiyası ilə uyğundur, ona görə hər iki tərəfdə eyni "real" rəqəm görünür.
-// Şəbəkə xətası olarsa haversine (düz xətt) təxminə geri qayıdır ki, sayğac heç vaxt tamam boş qalmasın.
+// Real yol marşrutuna görə məsafə (km) və müddət (saniyə) - Google Maps (Directions / Routes API).
+// Alınmazsa düz xətt (haversine) təxminə geri qayıdır ki, sayğac heç vaxt tamam boş qalmasın.
 async function getRealRoadRoute(lat1, lon1, lat2, lon2){
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    if(data && data.code === "Ok" && data.routes && data.routes[0]){
-      return {
-        distanceKm: data.routes[0].distance / 1000,
-        durationSeconds: data.routes[0].duration,
-        isReal: true
-      };
+    const rt = await Promise.race([
+      window.BGMap.route({ lat: lat1, lng: lon1 }, { lat: lat2, lng: lon2 }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 6000))
+    ]);
+    if(rt && rt.distance){
+      return { distanceKm: rt.distance / 1000, durationSeconds: rt.duration, isReal: true };
     }
-    throw new Error("OSRM boş cavab");
+    throw new Error("Google marşrut boş cavab");
   } catch(e){
     // Fallback: düz xətt məsafəsi üzərindən təxmin (real yol marşrutu alınmadıqda)
     const distanceKm = haversineDistanceKm(lat1, lon1, lat2, lon2);
@@ -4073,6 +4115,7 @@ let foods = [...staticFoods].filter(f => !(window.__isBlockedCat && window.__isB
 // bütün siyahının yenidən qurulub müqayisə edilməsinin qarşısını alır.
 let __productsById = new Map();
 let restaurantPhotos = {}; // restaurantId -> photoURL (hər restoranın öz loqosu qarışmasın deyə)
+let restaurantAddresses = {}; // restaurantId -> ünvan mətni
 let restaurantCoords = {}; // restaurantId -> {lat, lng} (Wolt-tərzi məsafəyə görə filter/sort üçün)
 const MAX_DELIVERY_RADIUS_KM = 15; // bu radiusdan uzaq restoranlar göstərilmir
 
@@ -4763,7 +4806,6 @@ function changeCartItemQty(itemName, amount) {
 function renderCartItems() {
   const cartItems = document.getElementById("cartItems");
   if(!cartItems) return;
-  cartItems.innerHTML = "";
   
   const groupedCart = {};
   cartArr.forEach(item => {
@@ -4800,7 +4842,7 @@ function renderCartItems() {
       </div>
     `;
   });
-  cartItems.innerHTML = cartHtml;
+  window.__setHTMLIfChanged(cartItems, cartHtml);
   calculateTotal();
   updateOrderButton();
 }
@@ -4835,7 +4877,6 @@ function renderFavorites(){
     box.innerHTML = `<div style="text-align:center;padding:30px;opacity:.6;">Favori məhsul yoxdur</div>`;
     return;
   }
-  box.innerHTML = "";
   let favHtml = "";
   favorites.forEach(f=>{
     favHtml += `
@@ -4847,7 +4888,7 @@ function renderFavorites(){
       </div>
     `;
   });
-  box.innerHTML = favHtml;
+  window.__setHTMLIfChanged(box, favHtml);
 }
 
 function getAvgRating(foodName){
@@ -5221,16 +5262,14 @@ function animate(t){
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill();
     });
   }
-  __bgRaf = requestAnimationFrame(animate);
+  /* Hissəcik döngüsü söndürülüb (canvas gizlidir, boş yerə CPU yeyirdi) */
 }
-function __bgStart(){ if(!__bgRaf && !document.hidden) __bgRaf = requestAnimationFrame(animate); }
+function __bgStart(){}
 /* visibilitychange: bg söndürülüb */
 document.addEventListener("scroll", function(){ __bgPausedUntil = performance.now() + 400; }, { capture: true, passive: true });
 window.addEventListener("resize", function(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 /* Arxa fon hissəcikləri performans üçün söndürülüb */
 
-const glow = document.querySelector(".cursor-glow");
-document.addEventListener("mousemove",(e)=>{ if(glow) { glow.style.left = e.clientX + "px"; glow.style.top = e.clientY + "px"; } });
 
 let searchDebounceTimer;
 document.getElementById("search").addEventListener("input",(e)=>{
@@ -5247,7 +5286,7 @@ function renderNotifications(){
     return;
   }
   const readIds = JSON.parse(localStorage.getItem("readNotifIds") || "[]");
-  box.innerHTML = notificationsCache.map(n => {
+  window.__setHTMLIfChanged(box, notificationsCache.map(n => {
     const isUnread = !readIds.includes(n.id);
     const time = n.createdAt ? new Date(n.createdAt.seconds ? n.createdAt.seconds*1000 : n.createdAt).toLocaleString() : "";
     return `
@@ -5257,7 +5296,7 @@ function renderNotifications(){
         <div class="notif-time">${time}</div>
       </div>
     `;
-  }).join("");
+  }).join(""));
 }
 
 /* ===== Flash endirim: geri sayım və müddəti bitmiş endirimlərin avtomatik silinməsi ===== */
@@ -5431,7 +5470,7 @@ function renderCampaignsPanel(){
   var box = document.getElementById("campaignsCards");
   if(!box) return;
   var camps = window.campaignsCache || [];
-  box.innerHTML = camps.map(function(c){ return campaignCardHtml(c, true); }).join("");
+  window.__setHTMLIfChanged(box, camps.map(function(c){ return campaignCardHtml(c, true); }).join(""));
 }
 window.renderCampaignsPanel = renderCampaignsPanel;
 
@@ -5444,7 +5483,7 @@ function renderPromoCodesList(){
     return;
   }
   const readIds = JSON.parse(localStorage.getItem("readPromoIds") || "[]");
-  box.innerHTML = promos.map(p => {
+  window.__setHTMLIfChanged(box, promos.map(p => {
     const isNew = !readIds.includes(p.id);
     const discountLabel = p.discountType === "fixed"
       ? `${p.discountValue} AZN endirim`
@@ -5456,7 +5495,7 @@ function renderPromoCodesList(){
         <div style="font-size:13px;margin-top:5px;opacity:.85;">${discountLabel}${minOrderLabel}</div>
       </div>
     `;
-  }).join("");
+  }).join(""));
 }
 window.renderPromoCodesList = renderPromoCodesList;
 
@@ -6297,6 +6336,7 @@ function updatePromoBadges(){
     if(change.type === "removed"){
       delete restaurantPhotos[id];
       delete restaurantCoords[id];
+      delete restaurantAddresses[id];
       __allRestaurantIds.delete(id);
       return;
     }
@@ -6310,6 +6350,7 @@ function updatePromoBadges(){
     }
     __allRestaurantIds.add(id);
     restaurantPhotos[id] = d.photoURL || "";
+    restaurantAddresses[id] = String(d.restaurantAddress || d.address || "").trim();
     const rLat = parseFloat(d.restaurantLat);
     const rLng = parseFloat(d.restaurantLng);
     if(!isNaN(rLat) && !isNaN(rLng)){
@@ -6663,7 +6704,6 @@ function updatePromoBadges(){
       if(typeof window.clearActiveOrderTracking === "function") window.clearActiveOrderTracking();
     }
 
-    historyList.innerHTML = "";
     let historyHtml = "";
     orders.forEach((order) => {
       const date = order.createdAt && order.createdAt.seconds
@@ -6694,7 +6734,7 @@ function updatePromoBadges(){
         </div>
       `;
     });
-    historyList.innerHTML = historyHtml;
+    window.__setHTMLIfChanged(historyList, historyHtml);
   }
 
   function listenToOrderHistory(userId) {
