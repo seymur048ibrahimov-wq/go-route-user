@@ -1,0 +1,100 @@
+{
+  "id": "./",
+  "name": "Go Route — Çatdırılma",
+  "short_name": "Go Route",
+  "description": "Go Route — Bakıda sürətli çatdırılma: restoran, market, içki, gül, aptek və daha çoxu. Sifariş ver, kuryeri xəritədə canlı izlə.",
+  "lang": "az",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": [
+    "food",
+    "shopping",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icon-48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "ss-1.png",
+      "sizes": "720x1372",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Çatdırılma ünvanı"
+    },
+    {
+      "src": "ss-2.png",
+      "sizes": "720x1372",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ana səhifə"
+    },
+    {
+      "src": "ss-3.png",
+      "sizes": "720x1372",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ödəmə üsulu"
+    },
+    {
+      "src": "ss-4.png",
+      "sizes": "720x1372",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Məxfilik"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
+}
