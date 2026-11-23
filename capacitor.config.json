@@ -1,0 +1,9 @@
+{
+  "appId": "com.goroute.user",
+  "appName": "Go Route",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#000000"
+  }
+}
