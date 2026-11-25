@@ -798,9 +798,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Go Route">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script>
   // KRİTİK: tema (dark/light) səhifə çəkilməzdən ƏVVƏL tətbiq olunur ki, işıqlı->tünd
   // "rəng sıçrayışı" (flash of wrong theme) baş verməsin. Bu skript <head>-in ən başında
@@ -854,7 +854,7 @@
     try {
       if (!("Notification" in window) || Notification.permission !== "granted") return false;
       var reg = ("serviceWorker" in navigator) ? await navigator.serviceWorker.ready : null;
-      var opts = { body: body || "", icon: "icon-192.png?v=2", badge: "icon-96.png?v=2", tag: tag || "goroute", renotify: true, vibrate: [250, 100, 250], data: { url: "./" } };
+      var opts = { body: body || "", icon: "icon-192.png", badge: "icon-96.png", tag: tag || "goroute", renotify: true, vibrate: [250, 100, 250], data: { url: "./" } };
       if (reg && reg.showNotification) await reg.showNotification(title || "Go Route", opts); else new Notification(title || "Go Route", opts);
       return true;
     } catch (e) { console.warn("Sistem bildirişi göstərilmədi:", e); return false; }

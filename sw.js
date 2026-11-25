@@ -3,15 +3,15 @@
    2) Firebase Cloud Messaging — tətbiq bağlı olanda push bildirişləri
    Bu fayl index.html ilə EYNİ qovluqda olmalıdır. */
 
-const CACHE = 'goroute-musteri-v2';
+const CACHE = 'goroute-musteri-v1';
 const PRECACHE = [
   './',
   './index.html',
   './offline.html',
   './manifest.json',
-  './icon-192.png?v=2',
-  './icon-512.png?v=2',
-  './maskable-512.png?v=2'
+  './icon-192.png',
+  './icon-512.png',
+  './maskable-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -91,7 +91,7 @@ try {
     const d = (payload && payload.data) || {};
     self.registration.showNotification(d.title || '🔔 Go Route', {
       body: d.body || 'Sifarişiniz barədə yenilik var.',
-      icon: './icon-192.png?v=2',
+      icon: './icon-192.png',
       badge: './icon-96.png',
       tag: d.orderId || 'goroute-order',
       renotify: true,
